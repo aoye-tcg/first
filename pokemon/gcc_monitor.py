@@ -14,10 +14,14 @@ def monitor():
         print("🔎 Monitor GCC : Playwright démarré", flush=True)
 
         print("🌐 Monitor GCC : lancement de Chromium...", flush=True)
+        print("🌐 Tentative Chromium...", flush=True)
 
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            timeout=30000
+        )
 
-        print("✅ Monitor GCC : Chromium lancé", flush=True)
+        print("✅ Chromium lancé !", flush=True)
 
         page = browser.new_page()
 
