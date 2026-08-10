@@ -74,17 +74,21 @@ def start_monitor():
         )
 
 
-print("🚀 Lancement du thread GCC...", flush=True)
+def launch_monitor():
+    print("🚀 Lancement du thread GCC...", flush=True)
 
-thread = threading.Thread(
-    target=start_monitor,
-    daemon=True
-)
+    thread = threading.Thread(
+        target=start_monitor,
+        daemon=True,
+        name="gcc-monitor"
+    )
 
-thread.start()
+    thread.start()
 
 
 if __name__ == "__main__":
+    launch_monitor()
+
     port = int(os.environ.get("PORT", 10000))
 
     app.run(
