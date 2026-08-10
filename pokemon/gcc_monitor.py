@@ -29,7 +29,7 @@ return None
 
 def extract_grade(text):
 match = re.search(
-r"\b(?:PSA|PCA|CCC)\s*(?:GRADE\s*)?(\d+(?:[.,]\d+)?)\b",
+r"\b(?:PSA|PCA|CCC)\s*(\d+(?:[.,]\d+)?)\b",
 text,
 re.IGNORECASE
 )
@@ -37,42 +37,29 @@ re.IGNORECASE
 if match:
     try:
         return float(match.group(1).replace(",", "."))
-    except:
+    except Exception:
         return None
 
 return None
 
 def extract_price(text):
-"""
-Cherche le prix situé avant 'Prix fixe'.
-Exemple :
-75 ... 280€ Prix fixe
-"""
-
 match = re.search(
-    r"(\d+(?:[.,]\d+)?)\s*€\s*Prix fixe",
-    text,
-    re.IGNORECASE
+r"(\d+(?:[.,]\d+)?)\s*€\s*Prix fixe",
+text,
+re.IGNORECASE
 )
 
 if match:
     try:
         return float(match.group(1).replace(",", "."))
-    except:
+    except Exception:
         return None
 
 return None
 
-def clean_title(text, grader):
-"""
-Nettoie le texte de l'annonce afin d'éviter
-d'envoyer toute la page à price_estimator.
-"""
-
+def clean_title(text):
 text = re.sub(r"\s+", " ", text).strip()
 
-# On essaie de récupérer uniquement le début
-# de l'annonce jusqu'aux informations de prix.
 parts = re.split(
     r"\bPrix fixe\b|\bFaire une offre\b|\bAcheter\b",
     text,
@@ -81,10 +68,6 @@ parts = re.split(
 
 if parts:
     text = parts[0].strip()
-
-# Supprime les nombres isolés correspondant
-# au compteur de l'annonce.
-text = re.sub(r"\b\d+\s*$", "", text).strip()
 
 return text[:500]
 
@@ -111,7 +94,7 @@ while True:
     try:
 
         print(
-            "🌐 Connexion à la section Achat à prix fixe...",
+            "🌐 Connexion à GCC Marketplace...",
             flush=True
         )
 
@@ -127,7 +110,7 @@ while True:
 
         if response.status_code != 200:
             print(
-                f"⚠️ GCC renvoie HTTP {response.status_code}",
+                f"⚠️ Erreur HTTP : {response.status_code}",
                 flush=True
             )
 
@@ -151,7 +134,7 @@ while True:
             flush=True
         )
 
-        found = 0
+        analysed = 0
 
         for link in links:
 
@@ -159,7 +142,6 @@ while True:
 
                 href = link.get("href", "").strip()
 
-                # On ne garde que les vraies annonces.
                 if "/item/" not in href:
                     continue
 
@@ -168,7 +150,6 @@ while True:
                 else:
                     url = href
 
-                # Évite les doublons dans la même page.
                 if url in SEEN:
                     continue
 
@@ -180,12 +161,13 @@ while True:
                 if not text:
                     continue
 
-                # Une annonce à prix fixe doit contenir
-                # cette mention.
                 if "prix fixe" not in text.lower():
                     continue
 
-                found += 1
+                if "pokemon" not in text.lower():
+                    continue
+
+                analysed += 1
 
                 print(
                     f"🎴 Analyse annonce : {url}",
@@ -195,12 +177,10 @@ while True:
                 grader = detect_grader(text)
 
                 if not grader:
-
                     print(
                         "⏭️ Gradueur non autorisé ou introuvable",
                         flush=True
                     )
-
                     continue
 
                 print(
@@ -208,24 +188,11 @@ while True:
                     flush=True
                 )
 
-                # On ne surveille que Pokémon.
-                if "pokemon" not in text.lower():
-
-                    print(
-                        "⏭️ Ce n'est pas une annonce Pokémon",
-                        flush=True
-                    )
-
-                    continue
+                title = clean_title(text)
 
                 grade = extract_grade(text)
 
                 price = extract_price(text)
-
-                title = clean_title(
-                    text,
-                    grader
-                )
 
                 print(
                     f"🎴 Carte : {title}",
@@ -238,26 +205,21 @@ while True:
                 )
 
                 if grade is not None:
-
                     print(
                         f"📊 Grade : {grade}",
                         flush=True
                     )
-
                 else:
-
                     print(
                         "📊 Grade : non détecté",
                         flush=True
                     )
 
                 if price is None:
-
                     print(
-                        "💰 Prix fixe : non détecté",
+                        "💰 Prix fixe non détecté",
                         flush=True
                     )
-
                     continue
 
                 print(
@@ -265,10 +227,6 @@ while True:
                     flush=True
                 )
 
-                # L'annonce a été traitée.
-                # On la mémorise même si l'estimation
-                # n'est pas encore disponible afin
-                # d'éviter de la retraiter à chaque cycle.
                 SEEN.add(url)
 
                 try:
@@ -302,7 +260,6 @@ while True:
                     flush=True
                 )
 
-                # Bonne affaire si prix <= 75 % de l'estimation.
                 if price <= estimated * 0.75:
 
                     print(
@@ -346,7 +303,7 @@ while True:
                 )
 
         print(
-            f"📊 Annonces à prix fixe analysées : {found}",
+            f"📊 Annonces Pokémon à prix fixe analysées : {analysed}",
             flush=True
         )
 
