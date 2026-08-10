@@ -58,11 +58,13 @@ def get_page(url):
         return None
 
 
+def clean_text(text):
+    return " ".join(text.split())
+
+
 def detect_grader(text):
     text_upper = text.upper()
 
-    # On cherche les gradueurs les plus spécifiques
-    # avant les noms courts.
     if "COLLECT AURA" in text_upper:
         return "COLLECT AURA"
 
@@ -78,42 +80,7 @@ def detect_grader(text):
     return None
 
 
-def detect_price(text):
-    """
-    Cherche un prix en euros dans le texte.
-    Exemples acceptés :
-    30 €
-    30€
-    30,00 €
-    30.00€
-    """
-
-    patterns = [
-        r"(\d+(?:[.,]\d{1,2})?)\s*€",
-        r"€\s*(\d+(?:[.,]\d{1,2})?)"
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, text)
-
-        if match:
-            try:
-                value = match.group(1).replace(",", ".")
-                return float(value)
-            except ValueError:
-                pass
-
-    return None
-
-
 def extract_grade(text):
-    """
-    Cherche un grade du type :
-    PSA 10
-    PCA 9.5
-    PCA 9,5
-    """
-
     match = re.search(
         r"\b(?:PSA|PCA|CCC)\s*(?:GRADE\s*)?(\d+(?:[.,]\d+)?)",
         text,
@@ -131,8 +98,126 @@ def extract_grade(text):
     return None
 
 
-def clean_text(text):
-    return " ".join(text.split())
+def detect_price(text):
+    patterns = [
+        r"(\d+(?:[.,]\d{1,2})?)\s*€",
+        r"€\s*(\d+(?:[.,]\d{1,2})?)"
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+
+        if match:
+            try:
+                return float(
+                    match.group(1).replace(",", ".")
+                )
+            except ValueError:
+                pass
+
+    return None
+
+
+# ============================================================
+# EXTRACTION DU NOM DE LA CARTE
+# ============================================================
+
+def extract_card_name(text, grader, grade):
+    """
+    Essaie de récupérer uniquement le nom de la carte
+    à partir du texte de l'annonce.
+
+    Exemple :
+    PSA 9 Arcanine Gradation ...
+
+    devient :
+
+    Arcanine
+    """
+
+    text = clean_text(text)
+
+    # --------------------------------------------------------
+    # 1. Cherche explicitement le bloc autour du grade
+    # --------------------------------------------------------
+
+    pattern = re.compile(
+        rf"\b{re.escape(grader)}\s*"
+        rf"{re.escape(str(grade).replace('.0', ''))}"
+        rf"\s+(.+?)(?=\s+Gradation\b|\s+Pokemon\b|\s+Pokémon\b|\s+\d+\s*€|\s+Prix fixe\b)",
+        re.IGNORECASE
+    )
+
+    match = pattern.search(text)
+
+    if match:
+        name = clean_text(match.group(1))
+
+        if name:
+            return name
+
+    # --------------------------------------------------------
+    # 2. Version plus permissive
+    # --------------------------------------------------------
+
+    pattern = re.compile(
+        rf"\b{re.escape(grader)}\s*"
+        rf"{re.escape(str(grade).replace('.0', ''))}"
+        rf"\s+(.+?)(?=\s+Gradation\b|\s+Vends\b|\s+Accueil\b)",
+        re.IGNORECASE
+    )
+
+    match = pattern.search(text)
+
+    if match:
+        name = clean_text(match.group(1))
+
+        if name:
+            return name
+
+    # --------------------------------------------------------
+    # 3. Dernier secours :
+    # prend quelques mots après PSA/PCA + grade
+    # --------------------------------------------------------
+
+    pattern = re.compile(
+        rf"\b{re.escape(grader)}\s*"
+        rf"{re.escape(str(grade).replace('.0', ''))}\s+"
+        rf"(.+)",
+        re.IGNORECASE
+    )
+
+    match = pattern.search(text)
+
+    if match:
+        name = clean_text(match.group(1))
+
+        # On coupe sur les éléments connus du site
+        stop_words = [
+            "Gradation",
+            "Vends tes articles",
+            "Français",
+            "Accueil",
+            "Enchères",
+            "LIVE",
+            "Achat à prix fixe",
+            "Explorer",
+            "À propos",
+            "Nouveau : Bonnes affaires",
+            "Pokemon",
+            "Pokémon"
+        ]
+
+        for stop in stop_words:
+            position = name.lower().find(stop.lower())
+
+            if position > 0:
+                name = name[:position].strip()
+
+        if name:
+            return name
+
+    return None
 
 
 # ============================================================
@@ -140,6 +225,7 @@ def clean_text(text):
 # ============================================================
 
 def analyse_listing(url):
+
     print(
         f"\n🎴 Analyse annonce : {url}",
         flush=True
@@ -159,6 +245,10 @@ def analyse_listing(url):
         soup.get_text(" ", strip=True)
     )
 
+    # --------------------------------------------------------
+    # GRADUEUR
+    # --------------------------------------------------------
+
     grader = detect_grader(text)
 
     if not grader:
@@ -173,43 +263,11 @@ def analyse_listing(url):
         flush=True
     )
 
+    # --------------------------------------------------------
+    # GRADE
+    # --------------------------------------------------------
+
     grade = extract_grade(text)
-
-    # --------------------------------------------------------
-    # Tentative de récupération du titre
-    # --------------------------------------------------------
-
-    title = None
-
-    for selector in [
-        "h1",
-        "h2",
-        "[class*='title']",
-        "[class*='name']"
-    ]:
-        element = soup.select_one(selector)
-
-        if element:
-            candidate = clean_text(
-                element.get_text(" ", strip=True)
-            )
-
-            if candidate:
-                title = candidate
-                break
-
-    if not title:
-        title = text[:250]
-
-    print(
-        f"🎴 Carte : {title}",
-        flush=True
-    )
-
-    print(
-        f"🏷️ Gradueur : {grader}",
-        flush=True
-    )
 
     if grade is not None:
         print(
@@ -223,16 +281,42 @@ def analyse_listing(url):
         )
 
     # --------------------------------------------------------
-    # Prix
+    # NOM DE CARTE
+    # --------------------------------------------------------
+
+    card_name = extract_card_name(
+        text,
+        grader,
+        grade
+    )
+
+    if not card_name:
+
+        print(
+            "❌ Nom de carte impossible à extraire",
+            flush=True
+        )
+
+        return
+
+    print(
+        f"🎴 Carte extraite : {card_name}",
+        flush=True
+    )
+
+    # --------------------------------------------------------
+    # PRIX
     # --------------------------------------------------------
 
     price = detect_price(text)
 
     if price is None:
+
         print(
             "💰 Prix non détecté",
             flush=True
         )
+
         return
 
     print(
@@ -241,27 +325,33 @@ def analyse_listing(url):
     )
 
     # --------------------------------------------------------
-    # Estimation
+    # ESTIMATION
     # --------------------------------------------------------
 
     try:
+
         estimated = estimate_price(
-            title,
+            card_name,
             grader,
             grade
         )
+
     except Exception as e:
+
         print(
             f"⚠️ Erreur estimation : {e}",
             flush=True
         )
+
         estimated = None
 
     if estimated is None:
+
         print(
             "💰 Estimation indisponible",
             flush=True
         )
+
         return
 
     print(
@@ -270,7 +360,7 @@ def analyse_listing(url):
     )
 
     # --------------------------------------------------------
-    # Détection bonne affaire
+    # SEUIL BONNE AFFAIRE
     # --------------------------------------------------------
 
     threshold = estimated * 0.75
@@ -283,10 +373,12 @@ def analyse_listing(url):
     if price <= threshold:
 
         if url in SEEN:
+
             print(
                 "⏭️ Annonce déjà signalée",
                 flush=True
             )
+
             return
 
         SEEN.add(url)
@@ -297,8 +389,9 @@ def analyse_listing(url):
         )
 
         try:
+
             send_alert(
-                title,
+                card_name,
                 price,
                 estimated,
                 url
@@ -310,12 +403,14 @@ def analyse_listing(url):
             )
 
         except Exception as e:
+
             print(
                 f"❌ Erreur envoi Telegram : {e}",
                 flush=True
             )
 
     else:
+
         print(
             "❌ Pas suffisamment sous-évaluée",
             flush=True
@@ -323,103 +418,15 @@ def analyse_listing(url):
 
 
 # ============================================================
-# RÉCUPÉRATION DES ANNONCES FIXED PRICE
-# ============================================================
-
-def get_fixed_price_listings():
-    print(
-        "🌐 Connexion à la page ACHAT À PRIX FIXE...",
-        flush=True
-    )
-
-    response = get_page(FIXED_PRICE_URL)
-
-    if response is None:
-        return []
-
-    print(
-        f"✅ GCC répond : HTTP {response.status_code}",
-        flush=True
-    )
-
-    print(
-        f"📦 Taille HTML : {len(response.text)} caractères",
-        flush=True
-    )
-
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
-
-    links = []
-
-    for a in soup.find_all("a", href=True):
-
-        href = a.get("href", "").strip()
-
-        if not href:
-            continue
-
-        # On ne garde que les liens vers des annonces
+# RÉCUPÉRATION DES ANNONCES À PRIX FIXE
         if "/item/" not in href:
             continue
 
         if href.startswith("/"):
             href = BASE_URL + href
 
-        elif href.startswith("http"):
-            pass
-
-        else:
-            continue
-
-        if href not in links:
-            links.append(href)
-
-    return links
-
-
-# ============================================================
-# MONITOR PRINCIPAL
-# ============================================================
-
-def monitor():
-
-    print(
-        "🔎 MONITOR GCC : démarrage...",
-        flush=True
-    )
-
-    while True:
-
-        try:
-
-            print(
-                "\n🔄 MONITOR GCC : nouveau cycle",
-                flush=True
-            )
-
-            links = get_fixed_price_listings()
-
-            print(
-                f"🛒 Annonces à prix fixe trouvées : {len(links)}",
-                flush=True
-            )
-
-            if not links:
-
-                print(
-                    "⚠️ Aucune annonce trouvée.",
-                    flush=True
-                )
-
-            else:
-
-                for url in links:
-
-                    try:
-                        analyse_listing(url)
+        elif not href.startswith("http"):
+                        )
 
                     except Exception as e:
 
@@ -428,7 +435,6 @@ def monitor():
                             flush=True
                         )
 
-                    # Petite pause pour éviter de bombarder GCC
                     time.sleep(1)
 
             print(
