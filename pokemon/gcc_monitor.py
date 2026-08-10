@@ -1,68 +1,150 @@
 import time
+
 from playwright.sync_api import sync_playwright
+
+from price_estimator import estimate_price
 from telegram_alert import send_alert
 
-ALLOWED_GRADERS = {"PSA", "PCA", "COLLECT AURA", "CCC"}
+
+ALLOWED_GRADERS = {
+    "PSA",
+    "PCA",
+    "COLLECT AURA",
+    "CCC"
+}
+
 SEEN = set()
 
 
 def monitor():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+    print("🔎 Monitor GCC : démarrage de Playwright...", flush=True)
 
-        while True:
-            try:
-                page.goto("https://gccmarketplace.com/", wait_until="networkidle")
+    try:
+        with sync_playwright() as p:
+            print("🔎 Monitor GCC : Playwright démarré", flush=True)
 
-                cards = page.locator("article, .card, .listing, .product, .product-card")
+            print("🌐 Monitor GCC : lancement de Chromium...", flush=True)
 
-                for i in range(cards.count()):
-                    try:
-                        item = cards.nth(i)
-                        text = item.inner_text()
+            browser = p.chromium.launch(headless=True)
 
-                        if "pokemon" not in text.lower():
-                            continue
+            print("✅ Monitor GCC : Chromium lancé", flush=True)
 
-                        grader = None
-                        for g in ALLOWED_GRADERS:
-                            if g.lower() in text.lower():
-                                grader = g
-                                break
+            page = browser.new_page()
 
-                        if not grader:
-                            continue
+            print("✅ Monitor GCC : nouvelle page créée", flush=True)
 
-                        title = text.split("\n")[0].strip()
+            while True:
+                try:
+                    print(
+                        "🌐 Monitor GCC : ouverture de GCC Marketplace...",
+                        flush=True
+                    )
 
-                        price = None
-                        for line in text.split("\n"):
-                            line = line.strip().replace("€", "").replace(",", ".")
-                            try:
-                                value = float(line)
-                                price = value
-                                break
-                            except Exception:
+                    page.goto(
+                        "https://gccmarketplace.com/",
+                        wait_until="networkidle",
+                        timeout=60000
+                    )
+
+                    print(
+                        "✅ Monitor GCC : page GCC chargée",
+                        flush=True
+                    )
+
+                    cards = page.locator(
+                        "article, .card, .listing"
+                    )
+
+                    count = cards.count()
+
+                    print(
+                        f"🔎 Monitor GCC : {count} éléments détectés",
+                        flush=True
+                    )
+
+                    for i in range(count):
+                        try:
+                            item = cards.nth(i)
+                            title = item.inner_text()
+
+                            if "pokemon" not in title.lower():
                                 continue
 
-                        if price is None:
-                            continue
+                            grader = None
 
-                        key = f"{title}|{price}"
+                            for g in ALLOWED_GRADERS:
+                                if g.lower() in title.lower():
+                                    grader = g
+                                    break
 
-                        if key in SEEN:
-                            continue
+                            if not grader:
+                                continue
 
-                        SEEN.add(key)
+                            print(
+                                f"🎴 Carte Pokémon détectée : {title[:150]}",
+                                flush=True
+                            )
 
-                        link = "https://gccmarketplace.com/"
-                        send_alert(title, price, price, link)
+                            print(
+                                f"🏷️ Grader détecté : {grader}",
+                                flush=True
+                            )
 
-                    except Exception:
-                        continue
+                            # Pour l'instant le prix réel n'est pas encore
+                            # récupéré depuis GCC.
+                            price = 0.0
 
-            except Exception as e:
-                print(f"Erreur scraping GCC : {e}")
+                            estimated = estimate_price(
+                                title,
+                                grader,
+                                None
+                            )
 
-            time.sleep(15)
+                            if estimated and price <= estimated * 0.75:
+
+                                if title not in SEEN:
+                                    SEEN.add(title)
+
+                                    print(
+                                        f"🚨 Bonne affaire détectée : {title}",
+                                        flush=True
+                                    )
+
+                                    send_alert(
+                                        title,
+                                        price,
+                                        estimated,
+                                        "https://gccmarketplace.com/"
+                                    )
+
+                        except Exception as e:
+                            print(
+                                f"⚠️ Erreur lors du traitement d'une annonce : {e}",
+                                flush=True
+                            )
+
+                    print(
+                        "⏳ Monitor GCC : nouvelle vérification dans 15 secondes...",
+                        flush=True
+                    )
+
+                    time.sleep(15)
+
+                except Exception as e:
+                    print(
+                        f"❌ Erreur lors du chargement de GCC : {e}",
+                        flush=True
+                    )
+
+                    print(
+                        "⏳ Nouvelle tentative dans 30 secondes...",
+                        flush=True
+                    )
+
+                    time.sleep(30)
+
+    except Exception as e:
+        print(
+            f"❌ ERREUR CRITIQUE DU MONITOR GCC : {e}",
+            flush=True
+        )
