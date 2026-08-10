@@ -19,13 +19,18 @@ def send_message(text):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-        requests.post(
+        response = requests.post(
             url,
             json={
                 "chat_id": CHAT_ID,
                 "text": text
             },
             timeout=20
+        )
+
+        print(
+            f"📤 Telegram : HTTP {response.status_code}",
+            flush=True
         )
 
     except Exception as e:
@@ -39,29 +44,43 @@ def home():
 
 @app.route("/telegram", methods=["POST"])
 def telegram():
-    update = request.get_json(force=True)
+    try:
+        update = request.get_json(force=True)
 
-    message = update.get("message", {})
-    text = message.get("text", "")
+        message = update.get("message", {})
+        text = message.get("text", "")
 
-    print(f"📩 Message Telegram reçu : {text}", flush=True)
-
-    if text == "/start":
-        send_message(
-            "🤖 GCC Pokémon Deal Bot\n"
-            "Connexion réussie !"
+        print(
+            f"📩 Message Telegram reçu : {text}",
+            flush=True
         )
 
-    elif text == "/test":
-        send_message(
-            "🧪 Test réussi ! Les notifications fonctionnent."
-        )
+        if text == "/start":
+            send_message(
+                "🤖 GCC Pokémon Deal Bot\n"
+                "Connexion réussie !"
+            )
 
-    return "OK"
+        elif text == "/test":
+            send_message(
+                "🧪 Test réussi ! Les notifications fonctionnent."
+            )
+
+        return "OK"
+
+    except Exception as e:
+        print(
+            f"❌ Erreur webhook Telegram : {e}",
+            flush=True
+        )
+        return "OK"
 
 
 def start_monitor():
-    print("🚀 Tentative de démarrage du monitor GCC...", flush=True)
+    print(
+        "🚀 Tentative de démarrage du monitor GCC...",
+        flush=True
+    )
 
     try:
         monitor()
@@ -74,22 +93,23 @@ def start_monitor():
         )
 
 
-def launch_monitor():
-    print("🚀 Lancement du thread GCC...", flush=True)
+print(
+    "🚀 Lancement du thread GCC...",
+    flush=True
+)
 
-    thread = threading.Thread(
-        target=start_monitor,
-        daemon=True,
-        name="gcc-monitor"
-    )
+thread = threading.Thread(
+    target=start_monitor,
+    daemon=True
+)
 
-    thread.start()
+thread.start()
 
 
 if __name__ == "__main__":
-    launch_monitor()
-
-    port = int(os.environ.get("PORT", 10000))
+    port = int(
+        os.environ.get("PORT", 10000)
+    )
 
     app.run(
         host="0.0.0.0",

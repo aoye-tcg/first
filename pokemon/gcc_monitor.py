@@ -1,5 +1,7 @@
+import os
 import time
 from playwright.sync_api import sync_playwright
+
 from price_estimator import estimate_price
 from telegram_alert import send_alert
 
@@ -21,30 +23,57 @@ def monitor():
         with sync_playwright() as p:
             print("🔎 Monitor GCC : Playwright démarré", flush=True)
 
-            print("🌐 Monitor GCC : lancement de Chromium...", flush=True)
-            print("🌐 Tentative Chromium...", flush=True)
+            # Vérification de l'emplacement des navigateurs Playwright
+            browsers_path = os.environ.get(
+                "PLAYWRIGHT_BROWSERS_PATH",
+                "/opt/render/.cache/ms-playwright"
+            )
+
+            print(
+                f"🔍 PLAYWRIGHT_BROWSERS_PATH = {browsers_path}",
+                flush=True
+            )
+
+            print(
+                "🌐 Monitor GCC : lancement de Chromium...",
+                flush=True
+            )
+
+            print(
+                "🌐 Tentative Chromium...",
+                flush=True
+            )
 
             browser = p.chromium.launch(
-                channel="chromium",
                 headless=True,
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
-                    "--disable-software-rasterizer"
+                    "--disable-software-rasterizer",
+                    "--disable-blink-features=AutomationControlled"
                 ]
             )
 
-            print("✅ Chromium lancé avec succès !", flush=True)
+            print(
+                "✅ Chromium lancé avec succès !",
+                flush=True
+            )
 
             page = browser.new_page()
 
-            print("🌐 Ouverture de GCC Marketplace...", flush=True)
+            print(
+                "🌐 Ouverture de GCC Marketplace...",
+                flush=True
+            )
 
             while True:
                 try:
-                    print("🔄 Nouvelle vérification GCC...", flush=True)
+                    print(
+                        "🔄 Nouvelle vérification GCC...",
+                        flush=True
+                    )
 
                     page.goto(
                         "https://gccmarketplace.com/",
@@ -71,6 +100,7 @@ def monitor():
                     for i in range(count):
                         try:
                             item = cards.nth(i)
+
                             title = item.inner_text().strip()
 
                             if not title:
@@ -103,8 +133,6 @@ def monitor():
                                 flush=True
                             )
 
-                            price = 0.0
-
                             estimated = estimate_price(
                                 title,
                                 grader,
@@ -113,33 +141,21 @@ def monitor():
 
                             if estimated is None:
                                 print(
-                                    "💰 Estimation indisponible pour le moment",
+                                    "💰 Estimation indisponible "
+                                    "pour le moment",
                                     flush=True
                                 )
                                 continue
 
                             print(
-                                f"💰 Prix GCC : {price} € | "
-                                f"Estimation : {estimated} €",
+                                f"💰 Estimation : {estimated} €",
                                 flush=True
                             )
 
-                            if price <= estimated * 0.75:
-
-                                if title not in SEEN:
-                                    SEEN.add(title)
-
-                                    print(
-                                        "🚨 BONNE AFFAIRE DÉTECTÉE !",
-                                        flush=True
-                                    )
-
-                                    send_alert(
-                                        title,
-                                        price,
-                                        estimated,
-                                        "https://gccmarketplace.com/"
-                                    )
+                            # Pour l'instant, on ne déclenche
+                            # aucune alerte automatiquement ici,
+                            # car le prix réel de l'annonce doit
+                            # encore être récupéré correctement.
 
                         except Exception as e:
                             print(
@@ -164,8 +180,18 @@ def monitor():
 
     except Exception as e:
         print(
-            f"❌ ERREUR MONITOR GCC : {e}",
+            f"❌ ERREUR MONITOR GCC : "
+            f"{type(e).__name__}: {e}",
             flush=True
         )
 
         raise
+
+
+if __name__ == "__main__":
+    print(
+        "🚀 gcc_monitor.py lancé directement",
+        flush=True
+    )
+
+    monitor()
