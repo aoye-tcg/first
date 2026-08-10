@@ -3,16 +3,26 @@ import requests
 from bs4 import BeautifulSoup
 
 
+SITE_URL = "https://gradedcardcenter.com/"
+
+ALLOWED_GRADERS = {
+    "PSA",
+    "PCA",
+    "COLLECT AURA",
+    "CCC"
+}
+
+
 def monitor():
     print("🔎 MONITOR GCC : démarrage...", flush=True)
 
     while True:
         try:
             print("🔄 MONITOR GCC : nouveau cycle", flush=True)
-            print("🌐 Connexion à GCC Marketplace...", flush=True)
+            print("🌐 Connexion à Graded Card Center...", flush=True)
 
             response = requests.get(
-                "https://gradedcardcenter.com/",
+                SITE_URL,
                 timeout=30,
                 headers={
                     "User-Agent": (
@@ -33,44 +43,79 @@ def monitor():
                 flush=True
             )
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(
+                response.text,
+                "html.parser"
+            )
 
-            # Recherche de tous les liens présents sur la page
-            links = soup.find_all("a")
+            # Texte complet de la page
+            text = soup.get_text(
+                " ",
+                strip=True
+            )
 
             print(
-                f"🔗 Nombre de liens trouvés : {len(links)}",
+                f"📝 Taille texte visible : {len(text)} caractères",
                 flush=True
             )
 
-            # Affichage des premiers liens intéressants
-            displayed = 0
+            # Recherche des gradueurs autorisés
+            print(
+                "🔍 Recherche des gradueurs autorisés...",
+                flush=True
+            )
 
-            for link in links:
-                text = link.get_text(" ", strip=True)
-                href = link.get("href")
+            found = 0
 
-                if not text:
-                    continue
+            for grader in ALLOWED_GRADERS:
 
-                print(
-                    f"🔎 ÉLÉMENT : {text[:150]}",
-                    flush=True
-                )
+                position = 0
 
-                if href:
+                while True:
+
+                    position = text.lower().find(
+                        grader.lower(),
+                        position
+                    )
+
+                    if position == -1:
+                        break
+
+                    found += 1
+
+                    start = max(
+                        0,
+                        position - 250
+                    )
+
+                    end = min(
+                        len(text),
+                        position + 500
+                    )
+
+                    extrait = text[start:end]
+
                     print(
-                        f" 🔗 LIEN : {href}",
+                        f"\n🏷️ GRADUEUR TROUVÉ : {grader}",
                         flush=True
                     )
 
-                displayed += 1
+                    print(
+                        f"📄 Extrait : {extrait}",
+                        flush=True
+                    )
 
-                if displayed >= 20:
+                    position += len(grader)
+
+                    # Évite d'inonder les logs
+                    if found >= 20:
+                        break
+
+                if found >= 20:
                     break
 
             print(
-                f"📊 {displayed} éléments affichés pour diagnostic",
+                f"\n📊 Nombre de résultats affichés : {found}",
                 flush=True
             )
 
@@ -82,6 +127,7 @@ def monitor():
             time.sleep(30)
 
         except Exception as e:
+
             print(
                 f"❌ ERREUR MONITOR GCC : "
                 f"{type(e).__name__}: {e}",
