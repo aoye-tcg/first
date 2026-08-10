@@ -12,7 +12,7 @@ def monitor():
             print("🌐 Connexion à GCC Marketplace...", flush=True)
 
             response = requests.get(
-                "https://gccmarketplace.com/",
+                "https://gradedcardcenter.com/",
                 timeout=30,
                 headers={
                     "User-Agent": (
