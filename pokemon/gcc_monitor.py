@@ -1,18 +1,6 @@
 import time
 import requests
-
-from price_estimator import estimate_price
-from telegram_alert import send_alert
-
-
-ALLOWED_GRADERS = {
-    "PSA",
-    "PCA",
-    "COLLECT AURA",
-    "CCC"
-}
-
-SEEN = set()
+from bs4 import BeautifulSoup
 
 
 def monitor():
@@ -21,9 +9,7 @@ def monitor():
     while True:
         try:
             print("🔄 MONITOR GCC : nouveau cycle", flush=True)
-
-            # Test simple de connexion au site GCC
-            print("🌐 Test de connexion à GCC Marketplace...", flush=True)
+            print("🌐 Connexion à GCC Marketplace...", flush=True)
 
             response = requests.get(
                 "https://gccmarketplace.com/",
@@ -43,21 +29,53 @@ def monitor():
             )
 
             print(
-                f"📦 Taille de la réponse : {len(response.text)} caractères",
+                f"📦 Taille HTML : {len(response.text)} caractères",
                 flush=True
             )
 
-            if response.status_code != 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # Recherche de tous les liens présents sur la page
+            links = soup.find_all("a")
+
+            print(
+                f"🔗 Nombre de liens trouvés : {len(links)}",
+                flush=True
+            )
+
+            # Affichage des premiers liens intéressants
+            displayed = 0
+
+            for link in links:
+                text = link.get_text(" ", strip=True)
+                href = link.get("href")
+
+                if not text:
+                    continue
+
                 print(
-                    f"⚠️ GCC ne renvoie pas HTTP 200 : {response.status_code}",
+                    f"🔎 ÉLÉMENT : {text[:150]}",
                     flush=True
                 )
 
-            # Pour l'instant on ne lance PAS Playwright.
-            # On vérifie simplement que le serveur peut accéder à GCC.
+                if href:
+                    print(
+                        f" 🔗 LIEN : {href}",
+                        flush=True
+                    )
+
+                displayed += 1
+
+                if displayed >= 20:
+                    break
 
             print(
-                "😴 Attente de 30 secondes avant le prochain test...",
+                f"📊 {displayed} éléments affichés pour diagnostic",
+                flush=True
+            )
+
+            print(
+                "😴 Attente de 30 secondes...",
                 flush=True
             )
 
@@ -65,12 +83,8 @@ def monitor():
 
         except Exception as e:
             print(
-                f"❌ ERREUR MONITOR GCC : {type(e).__name__}: {e}",
-                flush=True
-            )
-
-            print(
-                "😴 Nouvelle tentative dans 30 secondes...",
+                f"❌ ERREUR MONITOR GCC : "
+                f"{type(e).__name__}: {e}",
                 flush=True
             )
 
