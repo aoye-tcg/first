@@ -1,10 +1,10 @@
 import time
 from playwright.sync_api import sync_playwright
-from price_estimator import estimate_price
 from telegram_alert import send_alert
 
 ALLOWED_GRADERS = {"PSA", "PCA", "COLLECT AURA", "CCC"}
 SEEN = set()
+
 
 def monitor():
     with sync_playwright() as p:
@@ -12,36 +12,57 @@ def monitor():
         page = browser.new_page()
 
         while True:
-            page.goto("https://gccmarketplace.com/", wait_until="networkidle")
+            try:
+                page.goto("https://gccmarketplace.com/", wait_until="networkidle")
 
-            cards = page.locator("article, .card, .listing")
+                cards = page.locator("article, .card, .listing, .product, .product-card")
 
-            for i in range(cards.count()):
-                try:
-                    item = cards.nth(i)
-                    title = item.inner_text()
+                for i in range(cards.count()):
+                    try:
+                        item = cards.nth(i)
+                        text = item.inner_text()
 
-                    if "pokemon" not in title.lower():
+                        if "pokemon" not in text.lower():
+                            continue
+
+                        grader = None
+                        for g in ALLOWED_GRADERS:
+                            if g.lower() in text.lower():
+                                grader = g
+                                break
+
+                        if not grader:
+                            continue
+
+                        title = text.split("\n")[0].strip()
+
+                        price = None
+                        for line in text.split("\n"):
+                            line = line.strip().replace("€", "").replace(",", ".")
+                            try:
+                                value = float(line)
+                                price = value
+                                break
+                            except Exception:
+                                continue
+
+                        if price is None:
+                            continue
+
+                        key = f"{title}|{price}"
+
+                        if key in SEEN:
+                            continue
+
+                        SEEN.add(key)
+
+                        link = "https://gccmarketplace.com/"
+                        send_alert(title, price, price, link)
+
+                    except Exception:
                         continue
 
-                    grader = None
-                    for g in ALLOWED_GRADERS:
-                        if g.lower() in title.lower():
-                            grader = g
-                            break
-
-                    if not grader:
-                        continue
-
-                    price = 0.0
-                    estimated = estimate_price(title, grader, None)
-
-                    if estimated and price <= estimated * 0.75:
-                        if title not in SEEN:
-                            SEEN.add(title)
-                            send_alert(title, price, estimated, "https://gccmarketplace.com/")
-
-                except Exception:
-                    pass
+            except Exception as e:
+                print(f"Erreur scraping GCC : {e}")
 
             time.sleep(15)
