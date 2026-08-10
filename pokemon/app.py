@@ -13,25 +13,28 @@ CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def send_message(text):
     if not BOT_TOKEN or not CHAT_ID:
-        print("❌ Variables Telegram manquantes")
+        print("❌ Variables Telegram manquantes", flush=True)
         return
 
     try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
         requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            url,
             json={
                 "chat_id": CHAT_ID,
                 "text": text
             },
             timeout=20
         )
+
     except Exception as e:
-        print(f"❌ Erreur Telegram : {e}")
+        print(f"❌ Erreur Telegram : {e}", flush=True)
 
 
 @app.route("/")
 def home():
-    return "Bot Pokémon GCC en ligne"
+    return "GCC Pokemon Bot online"
 
 
 @app.route("/telegram", methods=["POST"])
@@ -41,7 +44,7 @@ def telegram():
     message = update.get("message", {})
     text = message.get("text", "")
 
-    print(f"📩 Message Telegram reçu : {text}")
+    print(f"📩 Message Telegram reçu : {text}", flush=True)
 
     if text == "/start":
         send_message(
@@ -58,21 +61,27 @@ def telegram():
 
 
 def start_monitor():
-    print("🚀 Tentative de démarrage du monitor GCC...")
+    print("🚀 Tentative de démarrage du monitor GCC...", flush=True)
 
     try:
         monitor()
+
     except Exception as e:
-        print(f"❌ ERREUR DU MONITOR GCC : {e}")
+        print(
+            f"❌ ERREUR MONITOR GCC : "
+            f"{type(e).__name__}: {e}",
+            flush=True
+        )
 
 
-print("🚀 Lancement du thread GCC...")
-monitor_thread = threading.Thread(
+print("🚀 Lancement du thread GCC...", flush=True)
+
+thread = threading.Thread(
     target=start_monitor,
     daemon=True
 )
 
-monitor_thread.start()
+thread.start()
 
 
 if __name__ == "__main__":
