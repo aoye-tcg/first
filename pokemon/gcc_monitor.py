@@ -25,7 +25,14 @@ def monitor():
 
             print("🌐 Monitor GCC : lancement de Chromium...", flush=True)
 
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(
+    headless=True,
+    args=[
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage"
+    ]
+)
 
             print("✅ Monitor GCC : Chromium lancé", flush=True)
 
