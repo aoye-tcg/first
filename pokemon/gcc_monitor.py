@@ -25,6 +25,7 @@ def monitor():
             print("🌐 Tentative Chromium...", flush=True)
 
             browser = p.chromium.launch(
+                channel="chromium",
                 headless=True,
                 args=[
                     "--no-sandbox",
