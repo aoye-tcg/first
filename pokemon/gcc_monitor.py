@@ -25,7 +25,14 @@ def monitor():
             print("🌐 Tentative Chromium...", flush=True)
 
             browser = p.chromium.launch(
-                headless=True
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-software-rasterizer"
+                ]
             )
 
             print("✅ Chromium lancé avec succès !", flush=True)
