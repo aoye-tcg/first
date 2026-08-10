@@ -16,7 +16,7 @@ ALLOWED_GRADERS = {
 SEEN = set()
 
 BASE_URL = "https://gradedcardcenter.com"
-FIXED_PRICE_URL = "https://gradedcardcenter.com/filtres/fixed-price"
+HOME_URL = "https://gradedcardcenter.com/"
 
 def detect_grader(text):
 text_upper = text.upper()
@@ -36,32 +36,49 @@ re.IGNORECASE
 
 if match:
     try:
-        return float(match.group(1).replace(",", "."))
+        return float(
+            match.group(1).replace(",", ".")
+        )
     except Exception:
         return None
 
 return None
 
 def extract_price(text):
-match = re.search(
-r"(\d+(?:[.,]\d+)?)\s*€\s*Prix fixe",
-text,
-re.IGNORECASE
-)
+patterns = [
+r"(\d+(?:[.,]\d+)?)\s*€\sPrix fixe",
+r"(\d+(?:[.,]\d+)?)\s€"
+]
 
-if match:
-    try:
-        return float(match.group(1).replace(",", "."))
-    except Exception:
-        return None
+for pattern in patterns:
+    match = re.search(
+        pattern,
+        text,
+        re.IGNORECASE
+    )
+
+    if match:
+        try:
+            return float(
+                match.group(1).replace(",", ".")
+            )
+        except Exception:
+            pass
 
 return None
 
 def clean_title(text):
-text = re.sub(r"\s+", " ", text).strip()
+text = re.sub(
+r"\s+",
+" ",
+text
+).strip()
 
+# On garde principalement le début
+# de l'annonce, avant les informations
+# de navigation et de prix.
 parts = re.split(
-    r"\bPrix fixe\b|\bFaire une offre\b|\bAcheter\b",
+    r"\bGradation\b|\bVends tes articles\b|\bFrançais\b",
     text,
     flags=re.IGNORECASE
 )
@@ -71,9 +88,159 @@ if parts:
 
 return text[:500]
 
+def analyse_item(session, url):
+
+print(
+    f"🎴 Analyse annonce : {url}",
+    flush=True
+)
+
+try:
+
+    response = session.get(
+        url,
+        timeout=30
+    )
+
+    if response.status_code != 200:
+
+        print(
+            f"⚠️ Annonce inaccessible : HTTP {response.status_code}",
+            flush=True
+        )
+
+        return
+
+    soup = BeautifulSoup(
+        response.text,
+        "html.parser"
+    )
+
+    text = soup.get_text(
+        " ",
+        strip=True
+    )
+
+    if not text:
+        return
+
+    grader = detect_grader(text)
+
+    if not grader:
+
+        print(
+            "⏭️ Gradueur non autorisé ou introuvable",
+            flush=True
+        )
+
+        return
+
+    print(
+        f"🏷️ Gradueur détecté : {grader}",
+        flush=True
+    )
+
+    # On vérifie que l'annonce concerne bien
+    # Pokémon.
+    if "pokemon" not in text.lower():
+
+        print(
+            "⏭️ Pas une carte Pokémon",
+            flush=True
+        )
+
+        return
+
+    # On cherche le prix fixe.
+    price = extract_price(text)
+
+    if price is None:
+
+        print(
+            "⏭️ Prix non détecté",
+            flush=True
+        )
+
+        return
+
+    # Extraction du grade.
+    grade = extract_grade(text)
+
+    # Création d'un titre relativement propre.
+    title = clean_title(text)
+
+    print(
+        f"🎴 Carte : {title}",
+        flush=True
+    )
+
+    print(
+        f"🏷️ Gradueur : {grader}",
+        flush=True
+    )
+
+    if grade is not None:
+
+        print(
+            f"📊 Grade : {grade}",
+            flush=True
+        )
+
+    else:
+
+        print(
+            "📊 Grade : non détecté",
+            flush=True
+        )
+
+    print(
+        f"💰 Prix détecté : {price} €",
+        flush=True
+    )
+
+    try:
+
+        estimated = estimate_price(
+            title,
+            grader,
+            grade
+        )
+
+    except Exception as e:
+
+        print(
+            f"⚠️ Erreur estimation : {e}",
+            flush=True
+        )
+
+        estimated = None
+
+    if estimated is None:
+
+        print(
+            "💰 Estimation indisponible",
+            flush=True
+        )
+
+        return
+
+    print(
+        f"📈 Estimation : {estimated} €",
+        flush=True
+    )
+
+    # Seuil de bonne affaire :
+    # prix GCC <= 75 % de l'estimation.
+        f"⚠️ Erreur analyse annonce : {e}",
+        flush=True
+    )
+
 def monitor():
 
-print("🚀 MONITOR GCC : démarrage...", flush=True)
+print(
+    "🚀 MONITOR GCC : démarrage...",
+    flush=True
+)
 
 session = requests.Session()
 
@@ -89,223 +256,60 @@ session.headers.update({
 
 while True:
 
-    print("🔄 MONITOR GCC : nouveau cycle", flush=True)
+    print(
+        "🔄 MONITOR GCC : nouveau cycle",
+        flush=True
+    )
 
     try:
 
         print(
-            "🌐 Connexion à GCC Marketplace...",
+            "🌐 Connexion à Graded Card Center...",
             flush=True
         )
 
         response = session.get(
-            FIXED_PRICE_URL,
-            timeout=30
-        )
-
-        print(
-            f"✅ GCC répond : HTTP {response.status_code}",
-            flush=True
-        )
-
-        if response.status_code != 200:
-            print(
-                f"⚠️ Erreur HTTP : {response.status_code}",
-                flush=True
-            )
-
-            time.sleep(30)
-            continue
-
-        print(
-            f"📦 Taille HTML : {len(response.text)} caractères",
-            flush=True
-        )
-
-        soup = BeautifulSoup(
-            response.text,
-            "html.parser"
-        )
-
-        links = soup.find_all("a", href=True)
-
-        print(
-            f"🔗 Nombre de liens trouvés : {len(links)}",
-            flush=True
-        )
-
-        analysed = 0
+            HOME_URL,
+        urls = []
 
         for link in links:
 
-            try:
+            href = link.get(
+                "href",
+                ""
+            ).strip()
 
-                href = link.get("href", "").strip()
+            if "/item/" not in href:
+                continue
 
-                if "/item/" not in href:
-                    continue
+            if href.startswith("/"):
+                url = BASE_URL + href
+            elif href.startswith("http"):
+                url = href
+            else:
+                continue
 
-                if href.startswith("/"):
-                    url = BASE_URL + href
-                else:
-                    url = href
-
-                if url in SEEN:
-                    continue
-
-                text = link.get_text(
-                    " ",
-                    strip=True
-                )
-
-                if not text:
-                    continue
-
-                if "prix fixe" not in text.lower():
-                    continue
-
-                if "pokemon" not in text.lower():
-                    continue
-
-                analysed += 1
-
-                print(
-                    f"🎴 Analyse annonce : {url}",
-                    flush=True
-                )
-
-                grader = detect_grader(text)
-
-                if not grader:
-                    print(
-                        "⏭️ Gradueur non autorisé ou introuvable",
-                        flush=True
-                    )
-                    continue
-
-                print(
-                    f"🏷️ Gradueur détecté : {grader}",
-                    flush=True
-                )
-
-                title = clean_title(text)
-
-                grade = extract_grade(text)
-
-                price = extract_price(text)
-
-                print(
-                    f"🎴 Carte : {title}",
-                    flush=True
-                )
-
-                print(
-                    f"🏷️ Gradueur : {grader}",
-                    flush=True
-                )
-
-                if grade is not None:
-                    print(
-                        f"📊 Grade : {grade}",
-                        flush=True
-                    )
-                else:
-                    print(
-                        "📊 Grade : non détecté",
-                        flush=True
-                    )
-
-                if price is None:
-                    print(
-                        "💰 Prix fixe non détecté",
-                        flush=True
-                    )
-                    continue
-
-                print(
-                    f"💰 Prix détecté : {price} €",
-                    flush=True
-                )
-
-                SEEN.add(url)
-
-                try:
-
-                    estimated = estimate_price(
-                        title,
-                        grader,
-                        grade
-                    )
-
-                except Exception as e:
-
-                    print(
-                        f"⚠️ Erreur estimation : {e}",
-                        flush=True
-                    )
-
-                    estimated = None
-
-                if estimated is None:
-
-                    print(
-                        "💰 Estimation indisponible",
-                        flush=True
-                    )
-
-                    continue
-
-                print(
-                    f"📈 Estimation : {estimated} €",
-                    flush=True
-                )
-
-                if price <= estimated * 0.75:
-
-                    print(
-                        "🚨 BONNE AFFAIRE DÉTECTÉE !",
-                        flush=True
-                    )
-
-                    try:
-
-                        send_alert(
-                            title,
-                            price,
-                            estimated,
-                            url
-                        )
-
-                        print(
-                            "📲 Alerte Telegram envoyée !",
-                            flush=True
-                        )
-
-                    except Exception as e:
-
-                        print(
-                            f"❌ Erreur Telegram : {e}",
-                            flush=True
-                        )
-
-                else:
-
-                    print(
-                        "⏭️ Pas assez intéressant",
-                        flush=True
-                    )
-
-            except Exception as e:
-
-                print(
-                    f"⚠️ Erreur traitement annonce : {e}",
-                    flush=True
-                )
+            if url not in urls:
+                urls.append(url)
 
         print(
-            f"📊 Annonces Pokémon à prix fixe analysées : {analysed}",
+            f"📊 Nombre d'annonces détectées : {len(urls)}",
             flush=True
         )
+
+        for url in urls:
+
+            if url in SEEN:
+                continue
+
+            analyse_item(
+                session,
+                url
+            )
+
+            # On mémorise l'annonce après analyse
+            # afin de ne pas la retraiter à chaque cycle.
+            SEEN.add(url)
 
         print(
             "😴 Attente de 30 secondes...",
