@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 from price_estimator import estimate_price
 from telegram_alert import send_alert
 
-
 ALLOWED_GRADERS = {
     "PSA",
     "PCA",
@@ -32,7 +31,7 @@ def detect_grader(text):
 
 def extract_grade(text):
     match = re.search(
-        r"\b(?:PSA|PCA|CCC)\s*(\d+(?:[.,]\d+)?)\b",
+        r"\\b(?:PSA|PCA|CCC)\\s*(\\d+(?:[.,]\\d+)?)\\b",
         text,
         re.IGNORECASE
     )
@@ -48,7 +47,7 @@ def extract_grade(text):
 
 def extract_price(text):
     match = re.search(
-        r"(\d+(?:[.,]\d+)?)\s*€\s*Prix fixe",
+        r"(\\d+(?:[.,]\\d+)?)\\s*€",
         text,
         re.IGNORECASE
     )
@@ -63,10 +62,10 @@ def extract_price(text):
 
 
 def clean_title(text):
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\\s+", " ", text).strip()
 
     parts = re.split(
-        r"\bPrix fixe\b|\bFaire une offre\b|\bAcheter\b",
+        r"\\bPrix fixe\\b|\\bFaire une offre\\b|\\bAcheter\\b",
         text,
         flags=re.IGNORECASE
     )
@@ -167,9 +166,6 @@ def monitor():
                     if not text:
                         continue
 
-                    if "prix fixe" not in text.lower():
-                        continue
-
                     if "pokemon" not in text.lower():
                         continue
 
@@ -223,7 +219,7 @@ def monitor():
 
                     if price is None:
                         print(
-                            "💰 Prix fixe non détecté",
+                            "💰 Prix non détecté",
                             flush=True
                         )
                         continue
@@ -309,7 +305,7 @@ def monitor():
                     )
 
             print(
-                f"📊 Annonces Pokémon à prix fixe analysées : {analysed}",
+                f"📊 Annonces Pokémon analysées : {analysed}",
                 flush=True
             )
 
@@ -323,8 +319,7 @@ def monitor():
         except Exception as e:
 
             print(
-                f"❌ ERREUR MONITOR GCC : "
-                f"{type(e).__name__}: {e}",
+                f"❌ ERREUR MONITOR GCC : {type(e).__name__}: {e}",
                 flush=True
             )
 
