@@ -29,29 +29,23 @@ def detect_grader(text):
 
 def extract_grade(text):
     match = re.search(
-        r"\\b(?:PSA|PCA|CCC)\\s*(\\d+(?:[.,]\\d+)?)\\b",
+        r"(?:PSA|PCA|CCC|COLLECT AURA)\\s*(\\d+(?:[.,]\\d+)?)",
         text,
-        re.IGNORECASE,
+        re.IGNORECASE
     )
     if match:
-        try:
-            return float(match.group(1).replace(",", "."))
-        except Exception:
-            return None
+        return float(match.group(1).replace(",", "."))
     return None
 
 
 def extract_price(text):
-    match = re.search(
+    prices = re.findall(
         r"(\\d+(?:[.,]\\d+)?)\\s*€",
         text,
-        re.IGNORECASE,
+        re.IGNORECASE
     )
-    if match:
-        try:
-            return float(match.group(1).replace(",", "."))
-        except Exception:
-            return None
+    if prices:
+        return float(prices[0].replace(",", "."))
     return None
 
 
@@ -60,7 +54,7 @@ def clean_title(text):
     parts = re.split(
         r"\\bPrix fixe\\b|\\bFaire une offre\\b|\\bAcheter\\b",
         text,
-        flags=re.IGNORECASE,
+        flags=re.IGNORECASE
     )
     if parts:
         text = parts[0].strip()
@@ -74,74 +68,22 @@ def analyse_item(session, url):
     if response.status_code != 200:
         print(
             f"⚠️ Annonce inaccessible : HTTP {response.status_code}",
-            flush=True,
-        )
-        return
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    text = soup.get_text(" ", strip=True)
-
-    if "pokemon" not in text.lower():
-        return
-
-    grader = detect_grader(text)
-    if not grader:
-        return
-
-    title = clean_title(text)
-    grade = extract_grade(text)
-    price = extract_price(text)
-
-    print(f"🏷️ Gradueur détecté : {grader}", flush=True)
-    print(f"🎴 Carte : {title}", flush=True)
-    print(f"📊 Grade : {grade}", flush=True)
-    print(f"💰 Prix détecté : {price} €", flush=True)
-
-    if price is None:
-        return
-
-    estimated = estimate_price(title, grader, grade)
-
-    if estimated is None:
-        print("💰 Estimation indisponible", flush=True)
-        return
-
-    print(f"📈 Estimation : {estimated} €", flush=True)
-
-    if price <= estimated * 0.75:
-        print("🚨 BONNE AFFAIRE DÉTECTÉE !", flush=True)
-        send_alert(title, price, estimated, url)
-
-
-def monitor():
-    print("🚀 MONITOR GCC : démarrage...", flush=True)
-
-    session = requests.Session()
-    session.headers.update(
-        {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/131.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-        }
-    )
+            flush=True
+    })
 
     while True:
         try:
             print("🔄 MONITOR GCC : nouveau cycle", flush=True)
             print(
                 "🌐 Connexion à GCC Marketplace...",
-                flush=True,
+                flush=True
             )
 
             response = session.get(FIXED_PRICE_URL, timeout=30)
 
             print(
                 f"✅ GCC répond : HTTP {response.status_code}",
-                flush=True,
+                flush=True
             )
 
             if response.status_code != 200:
@@ -162,7 +104,7 @@ def monitor():
 
             print(
                 f"📦 Nombre d'annonces détectées : {len(item_urls)}",
-                flush=True,
+                flush=True
             )
 
             analysed = 0
@@ -178,12 +120,12 @@ def monitor():
                 except Exception as e:
                     print(
                         f"⚠️ Erreur traitement annonce : {e}",
-                        flush=True,
+                        flush=True
                     )
 
             print(
                 f"📊 Annonces analysées : {analysed}",
-                flush=True,
+                flush=True
             )
             print("😴 Attente de 30 secondes...", flush=True)
             time.sleep(30)
@@ -191,6 +133,6 @@ def monitor():
         except Exception as e:
             print(
                 f"❌ ERREUR MONITOR GCC : {type(e).__name__}: {e}",
-                flush=True,
+                flush=True
             )
             time.sleep(30)
