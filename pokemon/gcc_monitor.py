@@ -139,6 +139,19 @@ def monitor():
                 flush=True
             )
 
+            print("📋 Diagnostic des 15 premiers liens :", flush=True)
+
+            for i, link in enumerate(links[:15]):
+                print("-----------------------------", flush=True)
+                print(
+                    f"[{i}] {link.get('href')}",
+                    flush=True
+                )
+                print(
+                    link.get_text(" ", strip=True),
+                    flush=True
+                )
+
             analysed = 0
 
             for link in links:
